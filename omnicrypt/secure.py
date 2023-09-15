@@ -1,4 +1,3 @@
-
 from typing import Any, Union, Dict, List, Set, Tuple, NoReturn, ClassVar, TextIO, Callable, Optional
 
 import base64
@@ -20,7 +19,6 @@ import bcrypt
 from getpass import getpass
 # from hmac import compare_digest
 
-# _old_master_salt = '6FwLrxJb5mTPVwthumpackMASTERsalt'
 
 
 def format_key(hsh: Union[str, bytes]) -> bytes:
@@ -67,30 +65,9 @@ def generate_salt() -> bytes:
 	'''
 	Generate a random salt for use in hash computation
 	'''
-	return bcrypt.gensalt()#.decode('latin1')
-	# if seed is None:
-	# 	return base
-	#
-	# pad = b'>\x98\xee\xe4\\\x88Ag\xb3\xb2\xc0\xa7\xa3#zf'
-	#
-	# seed = seed.encode('latin1')
-	# chunks = [seed[i:i + 16] for i in range(0, len(seed), 16)]
-	# if len(chunks):
-	# 	if len(chunks[-1]) < 16:
-	# 		chunks[-1] += pad[len(chunks[-1]):]
-	#
-	# 	saltseed = chunks[0]
-	# 	for chunk in chunks[1:]:
-	# 		saltseed ^= chunk
-	# else:
-	# 	saltseed = pad
-	#
-	# # endterm = base64.urlsafe_b64encode(saltseed).decode('latin1')
-	# endterm = saltseed.decode('latin1')
-	#
-	# terms = base.split('$')
-	# assert len(terms) == 4
-	# return '$'.join([terms[0], terms[1], terms[2], endterm])
+	return bcrypt.gensalt()
+
+
 
 _new_master_salt = b'$2b$12$FCATBltFSjuEjWDf3QYLMe' # deterministic
 _instance_master_salt = generate_salt() # random
@@ -124,6 +101,8 @@ def encrypt(data: bytes, hsh: Union[str, bytes] = None) -> bytes:
 	key = format_key(hsh)
 	f = Fernet(key)
 	return f.encrypt(data)
+
+
 
 def decrypt(data: bytes, hsh: Union[str, bytes] = None) -> bytes:
 	'''
@@ -164,6 +143,8 @@ def secure_pack(obj: SERIALIZABLE, hsh: Union[str, bytes] = None,
 
 	return encrypt(data, hsh)
 
+
+
 def secure_unpack(data: bytes, hsh: Union[str, bytes] = None,
                   return_meta: bool = False) -> SERIALIZABLE:
 	'''
@@ -182,161 +163,6 @@ def secure_unpack(data: bytes, hsh: Union[str, bytes] = None,
 
 	return data
 
-
-class Permission_Handler:  # TODO: make transactionable, actually just move to humpack
-	
-	def __init__(self, power_hierarchy={}, default_roles=[], god=None):
-		
-		self.god = god  # separate role that can't be modified by clients
-		
-		self.users = OrderedDict()  # user -> roles
-		self.powers = OrderedDict()  # user -> power
-		
-		self._power_hierarchy = OrderedDict()  # role -> power
-		self.roles = OrderedDict()  # role -> users
-		self.update_roles(**power_hierarchy)
-		
-		self.default_roles = [role for role in default_roles if role in self.roles]  # for new users
-		
-		self.permissions = OrderedDict()  # action -> roles
-		self.actions = OrderedDict()  # action -> power
-	
-	def _update_consistency(self, users=[], roles=[]):
-		
-		if not (len(users) or len(roles)):
-			users = list(self.users.keys())
-			roles = list(self.roles.keys())
-		
-		for user in users:
-			for role, usrs in self.roles.items():
-				if role not in self.users[user] and user in usrs:
-					self.users[user].add(role)
-				elif role in self.users[user] and user not in usrs:
-					self.users[user].remove(role)
-		
-		for role in roles:
-			for user, rls in self.users.items():
-				if user not in self.roles[role] and role in rls:
-					self.roles[role].add(user)
-				elif user in self.roles[role] and role not in rls:
-					self.roles[role].remove(role)
-	
-	def __contains__(self, user):
-		return self.contains_user(user)
-	
-	def contains_user(self, user):
-		return user in self.users or user in self.powers
-	
-	def contains_action(self, action):
-		return action in self.actions or action in self.permissions
-	
-	def _update_role(self, name, power):
-		if name not in self.roles:
-			self.roles[name] = set()
-		self._power_hierarchy[name] = power
-	
-	def update_role(self, role, power):
-		self._update_role(role, power)
-		self._update_consistency(role=[role])
-	
-	def update_roles(self, **roles):
-		for name, power in roles.items():
-			self._update_role(name, power)
-		self._update_consistency(role=roles)
-	
-	def update_user(self, user, *roles, power=None):
-		
-		if power is not None:
-			self.powers[user] = power
-		
-		if len(roles):
-			if user not in self.users:
-				self.users[user] = set()
-			self.users[user].update(roles)
-	
-	def new_user(self, user, *roles, power=None):
-		
-		roles = set(roles)
-		roles.update(self.default_roles)
-		
-		self.update_user(user, *roles, power=power)
-	
-	def set_user(self, user, *roles, power=None):
-		
-		if power is None and user in self.powers:
-			del self.powers[user]
-		
-		self.update_user(user, *roles, power=power)
-	
-	def remove_user(self, user):
-		
-		if user in self.users:
-			del self.users[user]
-		
-		if user in self.powers:
-			del self.powers[user]
-	
-	def update_action(self, action, *roles, power=None):
-		
-		if power is not None:
-			self.actions[action] = power
-		
-		if len(roles):
-			if action not in self.permissions:
-				self.permissions[action] = set()
-			self.permissions[action].update(roles)
-	
-	def new_action(self, action, *roles, power=None):
-		self.update_action(action, *roles, power=power)
-	
-	def set_action(self, action, *roles, power=None):
-		
-		if power is None and action in self.actions:
-			del self.actions[action]
-		
-		self.update_action(action, *roles, power=power)
-	
-	def remove_action(self, action):
-		
-		if action in self.actions:
-			del self.actions[action]
-		
-		if action in self.permissions:
-			del self.permissions[action]
-	
-	def validate(self, user, action=None):
-		
-		if user == self.god:
-			return user
-		
-		if self.contains_user(user):
-			raise UnknownUserError(user)
-		
-		if action is None:
-			return user
-		
-		if not self.contains_action(action):
-			raise UnknownActionError(action)
-		
-		if user in self.users and action in self.permissions \
-				and len(self.users[user].intersection(self.permissions[action])):
-			return user
-		
-		if user in self.powers and action in self.actions \
-				and self.powers[user] >= self.actions[action]:
-			return user
-		
-		if user in self.users and action in self.actions:
-			power = max(self._power_hierarchy.get(role, 0) for role in self.users[user])
-			if power >= self.actions[action]:
-				return user
-		
-		if user in self.powers and action in self.permissions:
-			req = min(self._power_hierarchy.get(role, 0) for role in self.permissions[action])
-			if self.powers[user] >= req:
-				return user
-		
-		raise InsufficientPermissionsError(user, action)
 
 
 
