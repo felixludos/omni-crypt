@@ -1,5 +1,9 @@
 # omni-crypt
 
+
+[![Unit-Tests](https://github.com/felixludos/omni-crypt/actions/workflows/tests.yaml/badge.svg)](https://github.com/felixludos/omni-crypt/actions/workflows/tests.yaml)
+
+
 Simple tools and utilities for encryption and decryption. 
 
 (Obviously, there are no guarantees any of these tools are secure or that they use computer security best practices, 
